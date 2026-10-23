@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinderLens — See where your Python spends its time</title>
+<meta name="description" content="CinderLens is a zero-dependency Python profiler: profile any script with stdlib cProfile and get a self-contained interactive HTML flamegraph report, plus an A/B compare mode.">
+<style>
+  :root{
+    --bg:#0d0b09; --panel:#151210; --panel2:#1a1512; --line:#2b241d;
+    --text:#f3ece2; --muted:#a89a86; --accent:#ff6b35; --accent2:#ffb347;
+    --green:#4ade80; --red:#f87171;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  nav{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;color:var(--text)}
+  nav .links a{color:var(--muted);margin-left:26px;font-size:15px}
+  nav .links a:hover{color:var(--text);text-decoration:none}
+  .gh-btn{background:#1c1512;border:1px solid var(--line);color:var(--text)!important;padding:8px 16px;border-radius:8px;font-weight:600}
+  .gh-btn:hover{border-color:var(--accent)}
+  .hero{padding:72px 0 26px;text-align:center}
+  .hero h1{font-size:52px;line-height:1.12;letter-spacing:-1px;font-weight:800}
+  .hero h1 .grad{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lede{color:var(--muted);font-size:20px;max-width:680px;margin:22px auto 34px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{padding:13px 26px;border-radius:9px;font-weight:600;font-size:16px;display:inline-block}
+  .btn:hover{text-decoration:none}
+  .btn-primary{background:var(--accent);color:#1c0d04}
+  .btn-primary:hover{background:#ff7f4d}
+  .btn-ghost{border:1px solid var(--line);color:var(--text);background:var(--panel)}
+  .stats{display:flex;justify-content:center;margin:46px auto 10px;max-width:780px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+  .stat{flex:1;padding:18px 8px;text-align:center;border-right:1px solid var(--line)}
+  .stat:last-child{border-right:none}
+  .stat b{display:block;font-size:24px;color:var(--text)}
+  .stat span{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.6px}
+  .flame-demo{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:44px auto;max-width:860px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .flame-demo .bar{display:flex;gap:8px;align-items:center;padding:12px 16px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .flame-demo .bar span{color:var(--muted);font-size:13px;margin-left:8px;font-family:var(--mono)}
+  .dot{width:12px;height:12px;border-radius:50%}
+  #demoflame{width:100%;height:auto;display:block}
+  .demo-cap{padding:10px 18px 16px;color:var(--muted);font-size:13px;font-family:var(--mono)}
+  .terminal{background:#0d1319;border:1px solid var(--line);border-radius:12px;margin:44px auto;max-width:860px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .terminal .bar{display:flex;gap:8px;align-items:center;padding:12px 16px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .terminal .bar span{color:var(--muted);font-size:13px;margin-left:8px;font-family:var(--mono)}
+  .terminal pre{padding:20px 22px;font-family:var(--mono);font-size:13px;line-height:1.65;overflow-x:auto;color:#c9d6e2;white-space:pre}
+  .t-cmd{color:#fff}.t-dim{color:#5f7285}.t-hot{color:var(--accent2)}.t-ok{color:var(--green)}
+  section{padding:52px 0}
+  h2{font-size:30px;letter-spacing:-.5px;margin-bottom:10px;text-align:center}
+  .sub{color:var(--muted);text-align:center;max-width:640px;margin:0 auto 38px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px}
+  .card h3{font-size:17px;margin-bottom:8px}
+  .card h3 .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(255,107,53,.14);color:var(--accent);font-size:14px;margin-right:8px;font-family:var(--mono)}
+  .card p{color:var(--muted);font-size:14.5px}
+  .card code{font-family:var(--mono);font-size:13px;color:var(--accent2)}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;counter-reset:step}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;position:relative}
+  .step::before{counter-increment:step;content:counter(step);display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#1c0d04;font-weight:800;margin-bottom:14px}
+  .step h3{font-size:16px;margin-bottom:8px;font-family:var(--mono)}
+  .step p{color:var(--muted);font-size:14.5px}
+  .step code{font-family:var(--mono);font-size:12.5px;color:var(--accent2)}
+  .codeblock{background:#0d1319;border:1px solid var(--line);border-radius:12px;padding:20px 22px;font-family:var(--mono);font-size:13.5px;line-height:1.7;overflow-x:auto;white-space:pre;color:#c9d6e2;max-width:860px;margin:0 auto 18px}
+  .codeblock .t-dim{color:#5f7285}
+  .sample{background:linear-gradient(180deg,rgba(255,107,53,.08),rgba(255,107,53,.02));border:1px solid var(--line);border-radius:14px;padding:36px;text-align:center;max-width:860px;margin:0 auto}
+  .sample h3{font-size:22px;margin-bottom:10px}
+  .sample p{color:var(--muted);max-width:600px;margin:0 auto 24px;font-size:15px}
+  .sample code{font-family:var(--mono);font-size:13px;color:var(--accent2)}
+  footer{border-top:1px solid var(--line);padding:34px 0 44px;text-align:center;color:var(--muted);font-size:14.5px}
+  @media(max-width:760px){.hero h1{font-size:38px}.stats{flex-wrap:wrap}.stat{min-width:40%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav>
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c1 4-4 6-4 11a4.5 4.5 0 0 0 9 0c0-2-1-3.5-2-5-.5 1.5-1.5 2-2.5 2C13 8 13 4 12 2z" fill="#ff6b35" opacity=".9"/><path d="M12 22a6.5 6.5 0 0 1-6.5-6.5c0-1.2.3-2.3.8-3.3C5 13.5 4 15 4 17a8 8 0 0 0 16 0c0-4.5-3-6.5-3.5-11-.3 2-1.2 3.2-2.4 4C14.5 7 14 4 12 2v20z" fill="#ff6b35" opacity=".25"/></svg>
+      CinderLens
+    </div>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="sample-report.html">Sample report</a>
+      <a class="gh-btn" href="https://github.com/judd69/cinderlens">GitHub ↗</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <h1>Find out where your Python<br><span class="grad">spends its time.</span></h1>
+    <p class="lede">CinderLens profiles any Python script with the standard library alone and turns the numbers into an interactive flamegraph — one self-contained HTML file. Zero dependencies. Zero setup.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="sample-report.html">See a real report</a>
+      <a class="btn btn-ghost" href="https://github.com/judd69/cinderlens">View on GitHub</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>0</b><span>dependencies</span></div>
+      <div class="stat"><b>1</b><span>HTML file per report</span></div>
+      <div class="stat"><b>30</b><span>tests passing</span></div>
+      <div class="stat"><b>A/B</b><span>compare mode</span></div>
+    </div>
+  </div>
+
+  <div class="flame-demo">
+    <div class="bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <span>cinderlens-report.html — live flamegraph</span>
+    </div>
+    <svg id="demoflame" viewBox="0 0 560 190" role="img" aria-label="Animated flamegraph demo"></svg>
+    <div class="demo-cap">$ cinderlens profile app.py &nbsp;→&nbsp; width = total time, color = self-time heat</div>
+  </div>
+
+  <div class="terminal">
+    <div class="bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <span>terminal — cinderlens profile</span>
+    </div>
+<pre><span class="t-cmd">$ cinderlens profile app.py --out report.html --json run1.json --text</span>
+
+<span class="t-dim">CinderLens profile: app.py</span>
+<span class="t-dim">  total time  1.736s (wall 1.736s)   functions 74</span>
+
+<span class="t-dim">Top functions by self time:</span>
+  <span class="t-hot">fib</span>                              1,028,457   853.25ms      0.8µs   853.25ms    49.1%
+  iterencode                              41   234.08ms     5.71ms   234.08ms    13.5%
+  raw_decode                              40   196.31ms     4.91ms   196.31ms    11.3%
+  concat_loop                              1   193.15ms   193.15ms   193.15ms    11.1%
+
+<span class="t-ok">wrote report.html (74 functions, 1.736s total)</span></pre>
+  </div>
+
+  <section id="features">
+    <h2>Everything a slow script is hiding</h2>
+    <p class="sub">cProfile collects the numbers; CinderLens turns them into answers — with no dependencies to install and no server to run.</p>
+    <div class="grid">
+      <div class="card"><h3><span class="n">◆</span>Interactive flamegraph</h3><p>Frame width is total time, color heat is self time. Click any frame to zoom in, follow breadcrumbs back out, search to highlight, hover for exact call counts and timings.</p></div>
+      <div class="card"><h3><span class="n">≡</span>Hot-path tables</h3><p>Top functions by self time with calls, per-call cost and share of the run. Sortable columns — click any row to flash the function in the flamegraph.</p></div>
+      <div class="card"><h3><span class="n">⇄</span>Compare mode</h3><p>Snapshot two runs with <code>--json</code>, then diff them: per-function deltas, before/after bars, faster in green and slower in red, sorted by biggest change.</p></div>
+      <div class="card"><h3><span class="n">∅</span>Zero-dependency</h3><p>Standard library only — <code>cProfile</code>, <code>argparse</code>, <code>unittest</code>. Nothing to audit, nothing to break, works on any Python 3.9+.</p></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">Three steps between you and knowing exactly which function to fix first.</p>
+    <div class="steps">
+      <div class="step"><h3>cinderlens profile app.py</h3><p>Your script runs under <code>cProfile</code> with its real argv and sys.path — the same environment <code>python app.py</code> would see.</p></div>
+      <div class="step"><h3>Tree rebuilt</h3><p>Flat per-function stats become a call tree: each function attaches to the caller contributing most of its time. Recursion merged, cycles broken.</p></div>
+      <div class="step"><h3>One HTML file</h3><p>Flamegraph, sortable hot-path table and summary cards — all inline CSS/JS, no CDN. Open it anywhere, keep it forever.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install &amp; use</h2>
+    <p class="sub">Python 3.9+ and nothing else. There's nothing to audit in the auditor's auditor.</p>
+    <div class="codeblock"><span class="t-dim"># install</span>
+pip install .
+<span class="t-dim"># or, isolated:</span>
+pipx install .
+
+<span class="t-dim"># profile a script (args after -- go to the script)</span>
+cinderlens profile app.py --out report.html --json run1.json --text
+
+<span class="t-dim"># compare two runs</span>
+cinderlens compare run1.json run2.json --out compare.html
+cinderlens compare run1.json run2.json --text</div>
+  </section>
+
+  <section>
+    <div class="sample">
+      <h3>The tool demoing itself</h3>
+      <p>This is a real CinderLens report — generated by profiling <code>examples/demo_slow.py</code>, a deliberately sluggish script (naive recursive fib, quadratic string concat, repeated full-list sorts, JSON serialize churn). Open it, click into the flame, search for <code>fib</code>.</p>
+      <a class="btn btn-primary" href="sample-report.html">Open the sample report</a>
+    </div>
+  </section>
+
+  <footer>
+    <p>Built by <a href="https://github.com/judd69">Jude (judd69)</a> · MIT License · <a href="https://github.com/judd69/cinderlens">github.com/judd69/cinderlens</a></p>
+    <p style="margin-top:6px">Day 4 of shipping one project every day. AIGuard audits your code, JarLens audits your jars, CinderLens audits your speed.</p>
+  </footer>
+
+</div>
+<script>
+(function () {
+  "use strict";
+  var svg = document.getElementById("demoflame");
+  var NS = "http://www.w3.org/2000/svg";
+  var W = 560, RH = 30, PAD = 12;
+  // rows, bottom-up: [label, widthFrac, heat 0..1]
+  var rows = [
+    [["main", 1.0, 0.05]],
+    [["fib", 0.42, 0.95], ["json_churn", 0.30, 0.45], ["busy_sort", 0.16, 0.35], ["concat", 0.12, 0.8]],
+    [["encode", 0.17, 0.7], ["loads", 0.13, 0.6], ["sorted", 0.10, 0.55], ["str.join", 0.06, 0.3]],
+    [["iterencode", 0.10, 0.9], ["raw_decode", 0.08, 0.85]]
+  ];
+  function heat(h, seed) {
+    var t = Math.pow(Math.max(0, Math.min(1, h)), 0.65);
+    var j = ((seed * 7919) % 100) / 100 * 14 - 7;
+    var r = Math.round(58 + (255 - 58) * t + j);
+    var g = Math.round(52 + (106 - 52) * t + j * 0.6);
+    var b = Math.round(46 + (26 - 46) * t);
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+  var rects = [];
+  rows.forEach(function (row, ri) {
+    var y = PAD + (rows.length - 1 - ri) * RH;
+    var x = 0, seed = 1;
+    row.forEach(function (cell) {
+      var label = cell[0], frac = cell[1], h = cell[2];
+      var w = frac * W;
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", x); r.setAttribute("y", y);
+      r.setAttribute("width", Math.max(w - 2, 2)); r.setAttribute("height", RH - 6);
+      r.setAttribute("rx", 4); r.setAttribute("fill", heat(h, seed));
+      svg.appendChild(r);
+      if (w > 64) {
+        var t = document.createElementNS(NS, "text");
+        t.textContent = label;
+        t.setAttribute("x", x + 8); t.setAttribute("y", y + 19);
+        t.setAttribute("fill", h > 0.55 ? "#1c0f06" : "#f5efe8");
+        t.setAttribute("font-size", "12"); t.setAttribute("font-family", "ui-monospace,monospace");
+        t.style.pointerEvents = "none";
+        svg.appendChild(t);
+      }
+      rects.push({ el: r, base: frac, phase: seed * 1.7, row: ri });
+      x += w; seed++;
+    });
+  });
+  var t0 = performance.now();
+  function tick(now) {
+    var t = (now - t0) / 1000;
+    var byRow = {};
+    rects.forEach(function (rc) {
+      var w = rc.base * (1 + 0.07 * Math.sin(t * 1.4 + rc.phase));
+      (byRow[rc.row] = byRow[rc.row] || []).push([rc, w]);
+    });
+    Object.keys(byRow).forEach(function (ri) {
+      var x = 0;
+      byRow[ri].forEach(function (pair) {
+        var rc = pair[0], w = pair[1] * W;
+        rc.el.setAttribute("x", x.toFixed(1));
+        rc.el.setAttribute("width", Math.max(w - 2, 2).toFixed(1));
+        x += w;
+      });
+    });
+    requestAnimationFrame(tick);
+  }
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
